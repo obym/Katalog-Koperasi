@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Package, LogIn, LogOut, Shield } from 'lucide-react';
+import { ShoppingCart, Package, LogIn, LogOut, Shield, ClipboardList } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
@@ -31,6 +31,13 @@ export const Navbar: React.FC = () => {
                 </span>
               )}
             </Link>
+
+            {user && !isAdmin && (
+              <Link to="/my-orders" className="flex items-center gap-1 text-gray-600 hover:text-indigo-600 transition-colors">
+                <ClipboardList className="h-5 w-5" />
+                <span className="hidden sm:inline font-medium">Pesanan Saya</span>
+              </Link>
+            )}
 
             {isAdmin && (
               <Link to="/admin" className="flex items-center gap-1 text-gray-600 hover:text-indigo-600 transition-colors">
