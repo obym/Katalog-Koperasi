@@ -83,18 +83,10 @@ export const Cart: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Get the latest order to generate the next orderCode
-      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(1));
-      const snapshot = await getDocs(q);
-      let nextNum = 1;
-      if (!snapshot.empty) {
-        const lastOrder = snapshot.docs[0].data();
-        if (lastOrder.orderCode) {
-          const match = lastOrder.orderCode.match(/\d+/);
-          if (match) nextNum = parseInt(match[0], 10) + 1;
-        }
-      }
-      const orderCode = `ORD-${String(nextNum).padStart(4, '0')}`;
+      // Generate a random order code since regular users can't read all orders
+      const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const timestampStr = Date.now().toString().slice(-4);
+      const orderCode = `ORD-${timestampStr}${randomStr}`;
 
       const orderData = {
         orderCode,
@@ -195,6 +187,7 @@ export const Cart: React.FC = () => {
                     </button>
                   </div>
                   <p className="text-indigo-600 font-bold">{formatRupiah(item.price)}<span className="text-sm font-normal text-gray-500">{item.unit ? ` / ${item.unit}` : ''}</span></p>
+                  <p className="text-xs text-gray-500 mt-1">Sisa Stok: {item.stock} {item.unit || ''}</p>
                 </div>
                 <div className="flex items-center gap-4 mt-4 sm:mt-0">
                   <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200">

@@ -7,7 +7,7 @@ interface CartItem extends Product {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Product) => void;
+  addToCart: (product: Product, quantity?: number) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -27,23 +27,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('cart', JSON.stringify(cart));
   }, [cart]);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, quantityToAdd: number = 1) => {
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === product.id);
       if (existingItem) {
-        if (existingItem.quantity >= product.stock) {
-          alert(`Maaf, stok ${product.name} tidak mencukupi.`);
+        if (existingItem.quantity + quantityToAdd > product.stock) {
+          alert(`Maaf, stok ${product.name} tidak mencukupi. Sisa stok: ${product.stock - existingItem.quantity}`);
           return prevCart;
         }
         return prevCart.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product.id ? { ...item, quantity: item.quantity + quantityToAdd } : item
         );
       }
-      if (product.stock < 1) {
-        alert(`Maaf, stok ${product.name} habis.`);
+      if (product.stock < quantityToAdd) {
+        alert(`Maaf, stok ${product.name} hanya tersisa ${product.stock}.`);
         return prevCart;
       }
-      return [...prevCart, { ...product, quantity: 1 }];
+      return [...prevCart, { ...product, quantity: quantityToAdd }];
     });
   };
 
