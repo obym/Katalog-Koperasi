@@ -1,0 +1,36 @@
+export interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  imageUrl: string;
+  stock: number;
+  createdAt: Date;
+}
+
+export interface OrderItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Order {
+  id: string;
+  userId: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  items: OrderItem[];
+  totalAmount: number;
+  status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  createdAt: Date;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: 'admin' | 'customer';
+  createdAt: Date;
+}
