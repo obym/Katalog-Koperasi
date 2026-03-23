@@ -31,9 +31,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCart((prevCart) => {
       const existingItem = prevCart.find((item) => item.id === product.id);
       if (existingItem) {
+        if (existingItem.quantity >= product.stock) {
+          alert(`Maaf, stok ${product.name} tidak mencukupi.`);
+          return prevCart;
+        }
         return prevCart.map((item) =>
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
+      }
+      if (product.stock < 1) {
+        alert(`Maaf, stok ${product.name} habis.`);
+        return prevCart;
       }
       return [...prevCart, { ...product, quantity: 1 }];
     });
@@ -48,11 +56,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       removeFromCart(productId);
       return;
     }
-    setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.id === productId ? { ...item, quantity } : item
-      )
-    );
+    setCart((prevCart) => prevCart.map((item) => {
+      if (item.id === productId) {
+        if (quantity > item.stock) {
+          alert(`Maaf, stok ${item.name} hanya tersisa ${item.stock}.`);
+          return { ...item, quantity: item.stock };
+        }
+        return { ...item, quantity };
+      }
+      return item;
+    }));
   };
 
   const clearCart = () => setCart([]);

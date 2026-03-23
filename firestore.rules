@@ -73,7 +73,7 @@ service cloud.firestore {
     }
 
     function isValidProduct(data) {
-      return hasOnlyAllowedFields(['name', 'description', 'price', 'category', 'imageUrl', 'stock', 'createdAt', 'productCode']) &&
+      return hasOnlyAllowedFields(['name', 'description', 'price', 'category', 'imageUrl', 'stock', 'createdAt', 'productCode', 'unit']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              data.description is string && data.description.size() <= 1000 &&
              data.price is number && data.price >= 0 &&
@@ -81,6 +81,7 @@ service cloud.firestore {
              isValidUrl(data.imageUrl) && data.imageUrl.size() <= 500 &&
              data.stock is number && data.stock >= 0 &&
              (!('productCode' in data) || (data.productCode is string && data.productCode.size() <= 50)) &&
+             (!('unit' in data) || (data.unit is string && data.unit.size() <= 20)) &&
              data.createdAt is timestamp;
     }
 
@@ -111,15 +112,16 @@ service cloud.firestore {
     match /products/{productId} {
       allow read: if true; // Publicly readable catalog
       allow create: if isAdmin() && isValidProduct(request.resource.data);
-      allow update: if isAdmin() && isValidProduct(request.resource.data) && areImmutableFieldsUnchanged(['createdAt']);
+      allow update: if (isAdmin() && isValidProduct(request.resource.data) && areImmutableFieldsUnchanged(['createdAt'])) ||
+                       (isAuthenticated() && isValidProduct(request.resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock']));
       allow delete: if isAdmin();
     }
 
     match /orders/{orderId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && isValidOrder(request.resource.data) && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'createdAt', 'items', 'totalAmount']);
-      allow delete: if false; // Orders should not be deleted, only cancelled
+      allow update: if isAdmin() && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'createdAt']);
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {

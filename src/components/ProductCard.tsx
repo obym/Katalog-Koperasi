@@ -41,8 +41,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <p className="text-sm text-gray-500 mb-4 line-clamp-2 flex-grow">{product.description}</p>
         <div className="flex items-end justify-between mt-auto">
           <div>
-            <p className="text-xs text-gray-500 mb-1">Stok: {product.stock}</p>
-            <p className="text-xl font-bold text-gray-900">{formatRupiah(product.price)}</p>
+            <p className="text-xs text-gray-500 mb-1">Stok: {product.stock} {product.unit || ''}</p>
+            <p className="text-xl font-bold text-gray-900">{formatRupiah(product.price)}<span className="text-sm font-normal text-gray-500">{product.unit ? ` / ${product.unit}` : ''}</span></p>
           </div>
           <button
             onClick={() => addToCart(product)}

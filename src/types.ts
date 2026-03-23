@@ -7,6 +7,7 @@ export interface Product {
   category: string;
   imageUrl: string;
   stock: number;
+  unit?: string;
   createdAt: Date;
 }
 
@@ -16,6 +17,7 @@ export interface OrderItem {
   name: string;
   quantity: number;
   price: number;
+  unit?: string;
 }
 
 export interface Order {

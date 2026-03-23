@@ -1,10 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, writeBatch, doc, increment } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+const QuantityInput = ({ 
+  quantity, 
+  onUpdate, 
+  onRemove 
+}: { 
+  quantity: number, 
+  onUpdate: (q: number) => void, 
+  onRemove: () => void 
+}) => {
+  const [inputValue, setInputValue] = useState(quantity.toString());
+
+  useEffect(() => {
+    setInputValue(quantity.toString());
+  }, [quantity]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+    const val = parseInt(e.target.value);
+    if (!isNaN(val) && val > 0) {
+      onUpdate(val);
+    }
+  };
+
+  const handleBlur = () => {
+    const val = parseInt(inputValue);
+    if (isNaN(val) || val <= 0) {
+      onRemove();
+    } else {
+      setInputValue(val.toString());
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      min="1"
+      value={inputValue}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      className="w-12 text-center font-medium text-gray-900 bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+    />
+  );
+};
 
 export const Cart: React.FC = () => {
   const { cart, updateQuantity, removeFromCart, totalPrice, clearCart } = useCart();
@@ -63,19 +107,35 @@ export const Cart: React.FC = () => {
           productCode: item.productCode || '',
           name: item.name,
           quantity: item.quantity,
-          price: item.price
+          price: item.price,
+          unit: item.unit || ''
         })),
         totalAmount: totalPrice,
         status: 'pending',
         createdAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, 'orders'), orderData);
+      const batch = writeBatch(db);
+      
+      // 1. Create the order document
+      const orderRef = doc(collection(db, 'orders'));
+      batch.set(orderRef, orderData);
+
+      // 2. Update stock for each product in the cart
+      for (const item of cart) {
+        const productRef = doc(db, 'products', item.id);
+        batch.update(productRef, {
+          stock: increment(-item.quantity)
+        });
+      }
+
+      await batch.commit();
+      
       clearCart();
       setIsSuccess(true);
     } catch (error) {
       console.error("Error submitting order:", error);
-      // alert("Terjadi kesalahan saat membuat pesanan. Silakan coba lagi.");
+      alert("Terjadi kesalahan saat membuat pesanan. Pastikan stok produk mencukupi.");
     } finally {
       setIsSubmitting(false);
     }
@@ -134,7 +194,7 @@ export const Cart: React.FC = () => {
                       <Trash2 className="h-5 w-5" />
                     </button>
                   </div>
-                  <p className="text-indigo-600 font-bold">{formatRupiah(item.price)}</p>
+                  <p className="text-indigo-600 font-bold">{formatRupiah(item.price)}<span className="text-sm font-normal text-gray-500">{item.unit ? ` / ${item.unit}` : ''}</span></p>
                 </div>
                 <div className="flex items-center gap-4 mt-4 sm:mt-0">
                   <div className="flex items-center bg-gray-50 rounded-lg border border-gray-200">
@@ -144,7 +204,11 @@ export const Cart: React.FC = () => {
                     >
                       <Minus className="h-4 w-4" />
                     </button>
-                    <span className="w-12 text-center font-medium text-gray-900">{item.quantity}</span>
+                    <QuantityInput 
+                      quantity={item.quantity} 
+                      onUpdate={(q) => updateQuantity(item.id, q)} 
+                      onRemove={() => removeFromCart(item.id)} 
+                    />
                     <button 
                       onClick={() => updateQuantity(item.id, item.quantity + 1)}
                       className="p-2 text-gray-600 hover:text-indigo-600 transition-colors"

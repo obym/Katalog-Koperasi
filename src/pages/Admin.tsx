@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, writeBatch, increment } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Product, Order } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -23,7 +23,12 @@ export const Admin: React.FC = () => {
     category: '',
     imageUrl: '',
     stock: '',
+    unit: '',
   });
+
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -75,10 +80,11 @@ export const Admin: React.FC = () => {
         category: product.category,
         imageUrl: product.imageUrl,
         stock: product.stock.toString(),
+        unit: product.unit || '',
       });
     } else {
       setEditingProduct(null);
-      setFormData({ productCode: '', name: '', description: '', price: '', category: '', imageUrl: '', stock: '' });
+      setFormData({ productCode: '', name: '', description: '', price: '', category: '', imageUrl: '', stock: '', unit: '' });
     }
     setIsModalOpen(true);
   };
@@ -103,6 +109,7 @@ export const Admin: React.FC = () => {
         imageUrl: formData.imageUrl,
         stock: Number(formData.stock),
         productCode: newProductCode,
+        unit: formData.unit,
       };
 
       if (editingProduct) {
@@ -131,12 +138,134 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const handleUpdateOrderStatus = async (orderId: string, status: Order['status']) => {
+  const handleUpdateOrderStatus = async (order: Order, status: Order['status']) => {
     try {
-      await updateDoc(doc(db, 'orders', orderId), { status });
+      const batch = writeBatch(db);
+      const orderRef = doc(db, 'orders', order.id);
+      batch.update(orderRef, { status });
+
+      if (order.status !== 'cancelled' && status === 'cancelled') {
+        // Restore stock
+        order.items.forEach(item => {
+          const productRef = doc(db, 'products', item.productId);
+          batch.update(productRef, { stock: increment(item.quantity) });
+        });
+      } else if (order.status === 'cancelled' && status !== 'cancelled') {
+        // Reduce stock again
+        order.items.forEach(item => {
+          const productRef = doc(db, 'products', item.productId);
+          batch.update(productRef, { stock: increment(-item.quantity) });
+        });
+      }
+
+      await batch.commit();
     } catch (error) {
       console.error("Error updating order status:", error);
       // alert("Gagal memperbarui status pesanan.");
+    }
+  };
+
+  const handleOpenOrderModal = (order: Order) => {
+    setEditingOrder(order);
+    setOrderItems([...order.items]);
+    setIsOrderModalOpen(true);
+  };
+
+  const handleUpdateOrderItemQuantity = (index: number, newQuantity: number | string) => {
+    const newItems = [...orderItems];
+    if (newQuantity === '') {
+      (newItems[index] as any).quantity = '';
+    } else {
+      const parsed = typeof newQuantity === 'string' ? parseInt(newQuantity) : newQuantity;
+      if (!isNaN(parsed) && parsed >= 0) {
+        newItems[index].quantity = parsed;
+      }
+    }
+    setOrderItems(newItems);
+  };
+
+  const handleRemoveOrderItem = (index: number) => {
+    const newItems = [...orderItems];
+    newItems.splice(index, 1);
+    setOrderItems(newItems);
+  };
+
+  const handleSubmitOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder) return;
+    
+    if (orderItems.length === 0) {
+      alert("Pesanan harus memiliki setidaknya satu produk.");
+      return;
+    }
+
+    // Ensure all quantities are valid numbers before saving
+    const validItems = orderItems.map(item => ({
+      ...item,
+      quantity: Number(item.quantity) || 1
+    }));
+
+    const totalAmount = validItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    try {
+      const batch = writeBatch(db);
+      const orderRef = doc(db, 'orders', editingOrder.id);
+      batch.update(orderRef, {
+        items: validItems,
+        totalAmount: totalAmount
+      });
+
+      if (editingOrder.status !== 'cancelled') {
+        const oldQuantities: Record<string, number> = {};
+        editingOrder.items.forEach(item => {
+          oldQuantities[item.productId] = (oldQuantities[item.productId] || 0) + item.quantity;
+        });
+
+        const newQuantities: Record<string, number> = {};
+        validItems.forEach(item => {
+          newQuantities[item.productId] = (newQuantities[item.productId] || 0) + item.quantity;
+        });
+
+        const allProductIds = new Set([...Object.keys(oldQuantities), ...Object.keys(newQuantities)]);
+
+        allProductIds.forEach(productId => {
+          const oldQ = oldQuantities[productId] || 0;
+          const newQ = newQuantities[productId] || 0;
+          const diff = oldQ - newQ;
+          
+          if (diff !== 0) {
+            const productRef = doc(db, 'products', productId);
+            batch.update(productRef, {
+              stock: increment(diff)
+            });
+          }
+        });
+      }
+
+      await batch.commit();
+      setIsOrderModalOpen(false);
+    } catch (error) {
+      console.error("Error updating order:", error);
+    }
+  };
+
+  const handleDeleteOrder = async (order: Order) => {
+    try {
+      const batch = writeBatch(db);
+      const orderRef = doc(db, 'orders', order.id);
+      batch.delete(orderRef);
+
+      // Restore stock if the order wasn't already cancelled
+      if (order.status !== 'cancelled') {
+        order.items.forEach(item => {
+          const productRef = doc(db, 'products', item.productId);
+          batch.update(productRef, { stock: increment(item.quantity) });
+        });
+      }
+
+      await batch.commit();
+    } catch (error) {
+      console.error("Error deleting order:", error);
     }
   };
 
@@ -236,7 +365,7 @@ export const Admin: React.FC = () => {
                       <td className="p-4 font-medium text-gray-900">{formatRupiah(product.price)}</td>
                       <td className="p-4">
                         <span className={`font-medium ${product.stock > 10 ? 'text-green-600' : product.stock > 0 ? 'text-yellow-600' : 'text-red-600'}`}>
-                          {product.stock}
+                          {product.stock} {product.unit || ''}
                         </span>
                       </td>
                       <td className="p-4 pr-6 text-right">
@@ -309,7 +438,7 @@ export const Admin: React.FC = () => {
                                 {item.productCode && <span className="text-xs font-mono text-indigo-500 block mb-0.5">{item.productCode}</span>}
                                 <span className="font-medium text-gray-800 line-clamp-2" title={item.name}>{item.name}</span>
                               </div>
-                              <span className="text-gray-500 font-mono whitespace-nowrap bg-gray-50 px-1.5 py-0.5 rounded text-xs mt-1">x{item.quantity}</span>
+                              <span className="text-gray-500 font-mono whitespace-nowrap bg-gray-50 px-1.5 py-0.5 rounded text-xs mt-1">x{item.quantity} {item.unit || ''}</span>
                             </div>
                           ))}
                         </div>
@@ -321,16 +450,32 @@ export const Admin: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-4 pr-6 text-right">
-                        <select
-                          value={order.status}
-                          onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as Order['status'])}
-                          className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none"
-                        >
-                          <option value="pending">Menunggu</option>
-                          <option value="processing">Diproses</option>
-                          <option value="completed">Selesai</option>
-                          <option value="cancelled">Batal</option>
-                        </select>
+                        <div className="flex items-center justify-end gap-2">
+                          <select
+                            value={order.status}
+                            onChange={(e) => handleUpdateOrderStatus(order, e.target.value as Order['status'])}
+                            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none"
+                          >
+                            <option value="pending">Menunggu</option>
+                            <option value="processing">Diproses</option>
+                            <option value="completed">Selesai</option>
+                            <option value="cancelled">Batal</option>
+                          </select>
+                          <button
+                            onClick={() => handleOpenOrderModal(order)}
+                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit Pesanan"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteOrder(order)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Hapus Pesanan"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -380,6 +525,10 @@ export const Admin: React.FC = () => {
                   <input type="number" min="0" required value={formData.stock} onChange={(e) => setFormData({...formData, stock: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none" placeholder="100" />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Satuan</label>
+                  <input type="text" value={formData.unit} onChange={(e) => setFormData({...formData, unit: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none" placeholder="pcs, kg, pack, dll" />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
                   <input type="text" required value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none" placeholder="Contoh: ATK" />
                 </div>
@@ -393,6 +542,90 @@ export const Admin: React.FC = () => {
                 <button type="submit" className="px-6 py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2">
                   <Check className="h-5 w-5" />
                   Simpan Produk
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Modal Edit Pesanan */}
+      {isOrderModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                <Edit className="h-6 w-6 text-indigo-600" />
+                Edit Pesanan
+              </h2>
+              <button onClick={() => setIsOrderModalOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors">
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmitOrder} className="p-8 overflow-y-auto flex-grow">
+              <div className="space-y-4">
+                {orderItems.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-xl">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{item.name}</h4>
+                      <p className="text-sm text-gray-500">{formatRupiah(item.price)} {item.unit ? `/ ${item.unit}` : ''}</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateOrderItemQuantity(index, (Number(item.quantity) || 1) - 1)}
+                          className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => handleUpdateOrderItemQuantity(index, e.target.value)}
+                          onBlur={(e) => {
+                            if (!item.quantity || Number(item.quantity) < 1) {
+                              handleUpdateOrderItemQuantity(index, 1);
+                            }
+                          }}
+                          className="w-16 text-center border border-gray-200 rounded-lg py-1 focus:ring-2 focus:ring-indigo-200 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateOrderItemQuantity(index, (Number(item.quantity) || 0) + 1)}
+                          className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveOrderItem(index)}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {orderItems.length === 0 && (
+                  <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                    Tidak ada produk dalam pesanan ini.
+                  </div>
+                )}
+                
+                <div className="mt-6 p-4 bg-indigo-50 rounded-xl flex justify-between items-center">
+                  <span className="font-medium text-indigo-900">Total Pesanan:</span>
+                  <span className="text-xl font-bold text-indigo-700">
+                    {formatRupiah(orderItems.reduce((sum, item) => sum + (item.price * (Number(item.quantity) || 0)), 0))}
+                  </span>
+                </div>
+              </div>
+              <div className="pt-6 mt-6 flex justify-end gap-3 border-t border-gray-100">
+                <button type="button" onClick={() => setIsOrderModalOpen(false)} className="px-6 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-100 transition-colors">Batal</button>
+                <button type="submit" className="px-6 py-3 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2">
+                  <Check className="h-5 w-5" />
+                  Simpan Perubahan
                 </button>
               </div>
             </form>
