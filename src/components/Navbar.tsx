@@ -55,7 +55,13 @@ export const Navbar: React.FC = () => {
               </div>
             ) : (
               <button
-                onClick={signInWithGoogle}
+                onClick={async () => {
+                  try {
+                    await signInWithGoogle();
+                  } catch (error: any) {
+                    alert(`Gagal login: ${error.message || 'Terjadi kesalahan'}. Pastikan domain Vercel Anda sudah ditambahkan ke Authorized Domains di Firebase Console.`);
+                  }
+                }}
                 className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
               >
                 <LogIn className="h-5 w-5" />
