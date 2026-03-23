@@ -2,23 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, writeBatch, increment } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Order } from '../types';
-import { Package, Clock, CheckCircle, XCircle, Edit, Trash2, Loader2, X } from 'lucide-react';
+import { Order, Product, OrderItem } from '../types';
+import { Package, Clock, CheckCircle, XCircle, Edit, Trash2, Loader2, X, Plus, Minus } from 'lucide-react';
 
 export const MyOrders: React.FC = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    customerName: string;
+    customerPhone: string;
+    customerAddress: string;
+    items: OrderItem[];
+  }>({
     customerName: '',
     customerPhone: '',
     customerAddress: '',
+    items: [],
   });
+  const [selectedProductId, setSelectedProductId] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -28,7 +36,7 @@ export const MyOrders: React.FC = () => {
       where('userId', '==', user.uid)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeOrders = onSnapshot(q, (snapshot) => {
       const ordersData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -45,7 +53,14 @@ export const MyOrders: React.FC = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const unsubscribeProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+    });
+
+    return () => {
+      unsubscribeOrders();
+      unsubscribeProducts();
+    };
   }, [user]);
 
   const formatRupiah = (price: number) => {
@@ -77,21 +92,108 @@ export const MyOrders: React.FC = () => {
       customerName: order.customerName,
       customerPhone: order.customerPhone,
       customerAddress: order.customerAddress,
+      items: [...order.items],
     });
+    setSelectedProductId('');
     setIsEditModalOpen(true);
+  };
+
+  const handleUpdateQuantity = (productId: string, delta: number) => {
+    setFormData(prev => {
+      const newItems = [...prev.items];
+      const itemIndex = newItems.findIndex(i => i.productId === productId);
+      if (itemIndex >= 0) {
+        const item = newItems[itemIndex];
+        const product = products.find(p => p.id === productId);
+        
+        const originalItem = editingOrder?.items.find(i => i.productId === productId);
+        const originalQty = originalItem ? originalItem.quantity : 0;
+        const availableStock = (product?.stock || 0) + originalQty;
+
+        const newQty = item.quantity + delta;
+        if (newQty > 0 && newQty <= availableStock) {
+          newItems[itemIndex] = { ...item, quantity: newQty };
+        }
+      }
+      return { ...prev, items: newItems };
+    });
+  };
+
+  const handleRemoveItem = (productId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      items: prev.items.filter(i => i.productId !== productId)
+    }));
+  };
+
+  const handleAddProduct = () => {
+    if (!selectedProductId) return;
+    const product = products.find(p => p.id === selectedProductId);
+    if (!product || product.stock <= 0) return;
+
+    setFormData(prev => {
+      const existingItem = prev.items.find(i => i.productId === selectedProductId);
+      if (existingItem) {
+        return prev;
+      }
+      return {
+        ...prev,
+        items: [...prev.items, {
+          productId: product.id,
+          productCode: product.productCode,
+          name: product.name,
+          price: product.price,
+          quantity: 1,
+          unit: product.unit
+        }]
+      };
+    });
+    setSelectedProductId('');
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOrder) return;
 
+    if (formData.items.length === 0) {
+      alert("Pesanan harus memiliki minimal 1 produk. Jika ingin membatalkan, gunakan tombol Batalkan Pesanan.");
+      return;
+    }
+
     try {
+      const batch = writeBatch(db);
       const orderRef = doc(db, 'orders', editingOrder.id);
-      await updateDoc(orderRef, {
+      
+      const stockChanges: Record<string, number> = {};
+      
+      editingOrder.items.forEach(item => {
+        stockChanges[item.productId] = (stockChanges[item.productId] || 0) + item.quantity;
+      });
+      
+      formData.items.forEach(item => {
+        stockChanges[item.productId] = (stockChanges[item.productId] || 0) - item.quantity;
+      });
+
+      for (const [productId, change] of Object.entries(stockChanges)) {
+        if (change !== 0) {
+          const productRef = doc(db, 'products', productId);
+          batch.update(productRef, {
+            stock: increment(change)
+          });
+        }
+      }
+
+      const newTotalAmount = formData.items.reduce((total, item) => total + (item.price * item.quantity), 0);
+
+      batch.update(orderRef, {
         customerName: formData.customerName,
         customerPhone: formData.customerPhone,
         customerAddress: formData.customerAddress,
+        items: formData.items,
+        totalAmount: newTotalAmount
       });
+
+      await batch.commit();
       setIsEditModalOpen(false);
     } catch (error) {
       console.error("Error updating order:", error);
@@ -212,7 +314,7 @@ export const MyOrders: React.FC = () => {
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
                   >
                     <Edit className="h-4 w-4" />
-                    Edit Info Pengiriman
+                    Edit Pesanan
                   </button>
                   <button
                     onClick={() => handleCancelClick(order)}
@@ -231,45 +333,122 @@ export const MyOrders: React.FC = () => {
       {/* Edit Modal */}
       {isEditModalOpen && editingOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Edit Info Pengiriman</h2>
+              <h2 className="text-xl font-bold text-gray-900">Edit Pesanan</h2>
               <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                 <X className="h-6 w-6" />
               </button>
             </div>
-            <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Penerima</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.customerName}
-                  onChange={(e) => setFormData({...formData, customerName: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none"
-                />
+            <form onSubmit={handleSaveEdit} className="p-6 overflow-y-auto space-y-6 flex-1">
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-900 border-b pb-2">Info Pengiriman</h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nama Penerima</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.customerName}
+                    onChange={(e) => setFormData({...formData, customerName: e.target.value})}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp</label>
+                  <input
+                    type="tel"
+                    required
+                    value={formData.customerPhone}
+                    onChange={(e) => setFormData({...formData, customerPhone: e.target.value})}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Alamat Pengiriman</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={formData.customerAddress}
+                    onChange={(e) => setFormData({...formData, customerAddress: e.target.value})}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none resize-none"
+                  ></textarea>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp</label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.customerPhone}
-                  onChange={(e) => setFormData({...formData, customerPhone: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none"
-                />
+
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-900 border-b pb-2">Produk Pesanan</h3>
+                
+                <div className="flex gap-2">
+                  <select
+                    value={selectedProductId}
+                    onChange={(e) => setSelectedProductId(e.target.value)}
+                    className="flex-1 px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none"
+                  >
+                    <option value="">Pilih Produk untuk Ditambahkan...</option>
+                    {products.filter(p => p.stock > 0).map(product => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} - {formatRupiah(product.price)} (Sisa: {product.stock})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddProduct}
+                    disabled={!selectedProductId}
+                    className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-xl hover:bg-indigo-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 mt-4">
+                  {formData.items.map(item => (
+                    <div key={item.productId} className="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <div className="flex-1 pr-4">
+                        <p className="font-medium text-gray-900 line-clamp-1">{item.name}</p>
+                        <p className="text-sm text-gray-500">{formatRupiah(item.price)}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center bg-white rounded-lg border border-gray-200">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(item.productId, -1)}
+                            className="p-1.5 text-gray-500 hover:text-indigo-600 transition-colors"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="w-8 text-center font-medium text-gray-900">{item.quantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(item.productId, 1)}
+                            className="p-1.5 text-gray-500 hover:text-indigo-600 transition-colors"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.productId)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {formData.items.length === 0 && (
+                    <p className="text-sm text-red-500 text-center py-2">Pesanan harus memiliki minimal 1 produk.</p>
+                  )}
+                </div>
+                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                  <span className="font-medium text-gray-700">Total Baru:</span>
+                  <span className="text-lg font-bold text-indigo-600">
+                    {formatRupiah(formData.items.reduce((total, item) => total + (item.price * item.quantity), 0))}
+                  </span>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Alamat Pengiriman</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={formData.customerAddress}
-                  onChange={(e) => setFormData({...formData, customerAddress: e.target.value})}
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none resize-none"
-                ></textarea>
-              </div>
-              <div className="pt-4 flex justify-end gap-3">
+
+              <div className="pt-4 flex justify-end gap-3 sticky bottom-0 bg-white border-t border-gray-100 mt-6 -mx-6 px-6 pb-2">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
@@ -279,7 +458,8 @@ export const MyOrders: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
+                  disabled={formData.items.length === 0}
+                  className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Simpan Perubahan
                 </button>

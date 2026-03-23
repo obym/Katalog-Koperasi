@@ -121,7 +121,7 @@ service cloud.firestore {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && isValidOrder(request.resource.data) && request.resource.data.userId == request.auth.uid;
       allow update: if (isAdmin() && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'createdAt'])) ||
-                       (isAuthenticated() && resource.data.userId == request.auth.uid && resource.data.status == 'pending' && request.resource.data.status in ['pending', 'cancelled'] && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'createdAt', 'orderCode', 'items', 'totalAmount']));
+                       (isAuthenticated() && resource.data.userId == request.auth.uid && resource.data.status == 'pending' && request.resource.data.status in ['pending', 'cancelled'] && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'createdAt', 'orderCode']));
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && resource.data.status == 'pending');
     }
 
