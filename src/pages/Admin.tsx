@@ -16,6 +16,7 @@ export const Admin: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({
+    productCode: '',
     name: '',
     description: '',
     price: '',
@@ -67,6 +68,7 @@ export const Admin: React.FC = () => {
     if (product) {
       setEditingProduct(product);
       setFormData({
+        productCode: product.productCode || '',
         name: product.name,
         description: product.description,
         price: product.price.toString(),
@@ -76,7 +78,7 @@ export const Admin: React.FC = () => {
       });
     } else {
       setEditingProduct(null);
-      setFormData({ name: '', description: '', price: '', category: '', imageUrl: '', stock: '' });
+      setFormData({ productCode: '', name: '', description: '', price: '', category: '', imageUrl: '', stock: '' });
     }
     setIsModalOpen(true);
   };
@@ -84,6 +86,15 @@ export const Admin: React.FC = () => {
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let newProductCode = formData.productCode;
+      if (!newProductCode || newProductCode.trim() === '') {
+        const maxCode = products.reduce((max, p) => {
+          const num = p.productCode ? parseInt(p.productCode.replace(/\D/g, ''), 10) : 0;
+          return num > max ? num : max;
+        }, 0);
+        newProductCode = `PRD-${String(maxCode + 1).padStart(3, '0')}`;
+      }
+
       const productData = {
         name: formData.name,
         description: formData.description,
@@ -91,6 +102,7 @@ export const Admin: React.FC = () => {
         category: formData.category,
         imageUrl: formData.imageUrl,
         stock: Number(formData.stock),
+        productCode: newProductCode,
       };
 
       if (editingProduct) {
@@ -193,7 +205,8 @@ export const Admin: React.FC = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm font-semibold uppercase tracking-wider">
-                    <th className="p-4 pl-6">Produk</th>
+                    <th className="p-4 pl-6">Kode Produk</th>
+                    <th className="p-4">Produk</th>
                     <th className="p-4">Kategori</th>
                     <th className="p-4">Harga</th>
                     <th className="p-4">Stok</th>
@@ -203,7 +216,10 @@ export const Admin: React.FC = () => {
                 <tbody className="divide-y divide-gray-100">
                   {products.map((product) => (
                     <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="p-4 pl-6">
+                      <td className="p-4 pl-6 font-mono text-sm text-gray-500">
+                        {product.productCode || '-'}
+                      </td>
+                      <td className="p-4">
                         <div className="flex items-center gap-4">
                           <img src={product.imageUrl} alt={product.name} className="h-12 w-12 rounded-lg object-cover bg-gray-100" referrerPolicy="no-referrer" />
                           <div>
@@ -237,7 +253,7 @@ export const Admin: React.FC = () => {
                   ))}
                   {products.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-gray-500">Belum ada produk. Tambahkan produk pertama Anda.</td>
+                      <td colSpan={6} className="p-8 text-center text-gray-500">Belum ada produk. Tambahkan produk pertama Anda.</td>
                     </tr>
                   )}
                 </tbody>
@@ -254,7 +270,8 @@ export const Admin: React.FC = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm font-semibold uppercase tracking-wider">
-                    <th className="p-4 pl-6">ID Pesanan</th>
+                    <th className="p-4 pl-6">Kode Pesanan</th>
+                    <th className="p-4">Tanggal</th>
                     <th className="p-4">Pelanggan</th>
                     <th className="p-4">No. Telepon</th>
                     <th className="p-4">Alamat Pengiriman</th>
@@ -268,9 +285,11 @@ export const Admin: React.FC = () => {
                   {orders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                       <td className="p-4 pl-6">
-                        <p className="font-mono text-sm text-gray-500">{order.id.slice(0, 8)}...</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {order.createdAt ? new Date((order.createdAt as any).seconds * 1000).toLocaleDateString('id-ID') : '-'}
+                        <p className="font-mono font-bold text-indigo-600">{order.orderCode || order.id.slice(0, 8).toUpperCase()}</p>
+                      </td>
+                      <td className="p-4">
+                        <p className="text-sm text-gray-600">
+                          {order.createdAt ? new Date((order.createdAt as any).seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
                         </p>
                       </td>
                       <td className="p-4">
@@ -286,8 +305,11 @@ export const Admin: React.FC = () => {
                         <div className="flex flex-col gap-1.5 max-h-28 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                           {order.items?.map((item, idx) => (
                             <div key={idx} className="text-sm flex justify-between items-start gap-3 border-b border-gray-50 pb-1.5 last:border-0 last:pb-0">
-                              <span className="font-medium text-gray-800 line-clamp-2" title={item.name}>{item.name}</span>
-                              <span className="text-gray-500 font-mono whitespace-nowrap bg-gray-50 px-1.5 py-0.5 rounded text-xs">x{item.quantity}</span>
+                              <div>
+                                {item.productCode && <span className="text-xs font-mono text-indigo-500 block mb-0.5">{item.productCode}</span>}
+                                <span className="font-medium text-gray-800 line-clamp-2" title={item.name}>{item.name}</span>
+                              </div>
+                              <span className="text-gray-500 font-mono whitespace-nowrap bg-gray-50 px-1.5 py-0.5 rounded text-xs mt-1">x{item.quantity}</span>
                             </div>
                           ))}
                         </div>
@@ -314,7 +336,7 @@ export const Admin: React.FC = () => {
                   ))}
                   {orders.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-gray-500">Belum ada pesanan masuk.</td>
+                      <td colSpan={9} className="p-8 text-center text-gray-500">Belum ada pesanan masuk.</td>
                     </tr>
                   )}
                 </tbody>
@@ -336,6 +358,11 @@ export const Admin: React.FC = () => {
             </div>
             <form onSubmit={handleSubmitProduct} className="p-6 space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kode Produk</label>
+                  <input type="text" value={formData.productCode} onChange={(e) => setFormData({...formData, productCode: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none bg-gray-50" placeholder="Contoh: PRD-001" />
+                  <p className="text-xs text-gray-500 mt-1">Kosongkan jika ingin sistem membuat kode otomatis.</p>
+                </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk</label>
                   <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all outline-none" placeholder="Contoh: Kertas HVS A4" />

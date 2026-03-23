@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -39,13 +39,28 @@ export const Cart: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      // Get the latest order to generate the next orderCode
+      const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(1));
+      const snapshot = await getDocs(q);
+      let nextNum = 1;
+      if (!snapshot.empty) {
+        const lastOrder = snapshot.docs[0].data();
+        if (lastOrder.orderCode) {
+          const match = lastOrder.orderCode.match(/\d+/);
+          if (match) nextNum = parseInt(match[0], 10) + 1;
+        }
+      }
+      const orderCode = `ORD-${String(nextNum).padStart(4, '0')}`;
+
       const orderData = {
+        orderCode,
         userId: user.uid,
         customerName: formData.customerName,
         customerPhone: formData.customerPhone,
         customerAddress: formData.customerAddress,
         items: cart.map(item => ({
           productId: item.id,
+          productCode: item.productCode || '',
           name: item.name,
           quantity: item.quantity,
           price: item.price

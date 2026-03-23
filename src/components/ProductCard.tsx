@@ -30,6 +30,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold text-indigo-600 shadow-sm">
           {product.category}
         </div>
+        {product.productCode && (
+          <div className="absolute top-3 right-3 bg-gray-900/80 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-white shadow-sm tracking-wide">
+            {product.productCode}
+          </div>
+        )}
       </div>
       <div className="p-5 flex flex-col flex-grow">
         <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-2">{product.name}</h3>

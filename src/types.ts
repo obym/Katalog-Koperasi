@@ -1,5 +1,6 @@
 export interface Product {
   id: string;
+  productCode?: string;
   name: string;
   description: string;
   price: number;
@@ -11,6 +12,7 @@ export interface Product {
 
 export interface OrderItem {
   productId: string;
+  productCode?: string;
   name: string;
   quantity: number;
   price: number;
@@ -18,6 +20,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  orderCode?: string;
   userId: string;
   customerName: string;
   customerPhone: string;

@@ -73,18 +73,19 @@ service cloud.firestore {
     }
 
     function isValidProduct(data) {
-      return hasOnlyAllowedFields(['name', 'description', 'price', 'category', 'imageUrl', 'stock', 'createdAt']) &&
+      return hasOnlyAllowedFields(['name', 'description', 'price', 'category', 'imageUrl', 'stock', 'createdAt', 'productCode']) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              data.description is string && data.description.size() <= 1000 &&
              data.price is number && data.price >= 0 &&
              data.category is string && data.category.size() > 0 && data.category.size() <= 50 &&
              isValidUrl(data.imageUrl) && data.imageUrl.size() <= 500 &&
              data.stock is number && data.stock >= 0 &&
+             (!('productCode' in data) || (data.productCode is string && data.productCode.size() <= 50)) &&
              data.createdAt is timestamp;
     }
 
     function isValidOrder(data) {
-      return hasOnlyAllowedFields(['userId', 'customerName', 'customerPhone', 'customerAddress', 'items', 'totalAmount', 'status', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'customerName', 'customerPhone', 'customerAddress', 'items', 'totalAmount', 'status', 'createdAt', 'orderCode']) &&
              data.userId is string &&
              data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 100 &&
              data.customerPhone is string && data.customerPhone.size() > 0 && data.customerPhone.size() <= 20 &&
@@ -92,6 +93,7 @@ service cloud.firestore {
              data.items is list && data.items.size() > 0 && data.items.size() <= 100 &&
              data.totalAmount is number && data.totalAmount >= 0 &&
              data.status in ['pending', 'processing', 'completed', 'cancelled'] &&
+             (!('orderCode' in data) || (data.orderCode is string && data.orderCode.size() <= 50)) &&
              data.createdAt is timestamp;
     }
 
