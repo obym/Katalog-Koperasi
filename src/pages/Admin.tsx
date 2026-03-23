@@ -258,6 +258,7 @@ export const Admin: React.FC = () => {
                     <th className="p-4">Pelanggan</th>
                     <th className="p-4">No. Telepon</th>
                     <th className="p-4">Alamat Pengiriman</th>
+                    <th className="p-4">Detail Produk</th>
                     <th className="p-4">Total</th>
                     <th className="p-4">Status</th>
                     <th className="p-4 pr-6 text-right">Aksi</th>
@@ -281,6 +282,16 @@ export const Admin: React.FC = () => {
                       <td className="p-4 max-w-xs">
                         <p className="text-sm text-gray-500 line-clamp-2" title={order.customerAddress}>{order.customerAddress}</p>
                       </td>
+                      <td className="p-4 min-w-[200px]">
+                        <div className="flex flex-col gap-1.5 max-h-28 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
+                          {order.items?.map((item, idx) => (
+                            <div key={idx} className="text-sm flex justify-between items-start gap-3 border-b border-gray-50 pb-1.5 last:border-0 last:pb-0">
+                              <span className="font-medium text-gray-800 line-clamp-2" title={item.name}>{item.name}</span>
+                              <span className="text-gray-500 font-mono whitespace-nowrap bg-gray-50 px-1.5 py-0.5 rounded text-xs">x{item.quantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
                       <td className="p-4 font-bold text-indigo-600">{formatRupiah(order.totalAmount)}</td>
                       <td className="p-4">
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${statusColors[order.status]}`}>
@@ -303,7 +314,7 @@ export const Admin: React.FC = () => {
                   ))}
                   {orders.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-gray-500">Belum ada pesanan masuk.</td>
+                      <td colSpan={8} className="p-8 text-center text-gray-500">Belum ada pesanan masuk.</td>
                     </tr>
                   )}
                 </tbody>
