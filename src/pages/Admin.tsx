@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, writeBatch, increment } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Product, Order } from '../types';
+import { Product, Order, CustomOrder, OrderItem } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Package, ShoppingBag, Plus, Trash2, Edit, X, Check, Loader2, ShieldAlert, Download, History, Users } from 'lucide-react';
+import { Package, ShoppingBag, Plus, Trash2, Edit, X, Check, Loader2, ShieldAlert, Download, History, Users, MessageSquare } from 'lucide-react';
 
 export const Admin: React.FC = () => {
   const { isAdmin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'users'>('products');
-  const [activeOrdersTab, setActiveOrdersTab] = useState<'active' | 'history'>('active');
+  const [activeOrdersTab, setActiveOrdersTab] = useState<'active' | 'history' | 'custom'>('active');
   
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [customOrders, setCustomOrders] = useState<CustomOrder[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,6 +48,11 @@ export const Admin: React.FC = () => {
       setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
     });
 
+    const qCustomOrders = query(collection(db, 'customOrders'), orderBy('createdAt', 'desc'));
+    const unsubCustomOrders = onSnapshot(qCustomOrders, (snapshot) => {
+      setCustomOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CustomOrder)));
+    });
+
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       usersData.sort((a: any, b: any) => {
@@ -62,6 +68,7 @@ export const Admin: React.FC = () => {
     return () => {
       unsubProducts();
       unsubOrders();
+      unsubCustomOrders();
       unsubUsers();
     };
   }, [isAdmin]);
@@ -151,6 +158,22 @@ export const Admin: React.FC = () => {
     } catch (error) {
       console.error("Error deleting product:", error);
       // alert("Gagal menghapus produk.");
+    }
+  };
+
+  const handleUpdateCustomOrderStatus = async (orderId: string, status: CustomOrder['status']) => {
+    try {
+      await updateDoc(doc(db, 'customOrders', orderId), { status });
+    } catch (error) {
+      console.error("Error updating custom order status:", error);
+    }
+  };
+
+  const handleDeleteCustomOrder = async (orderId: string) => {
+    try {
+      await deleteDoc(doc(db, 'customOrders', orderId));
+    } catch (error) {
+      console.error("Error deleting custom order:", error);
     }
   };
 
@@ -511,6 +534,22 @@ export const Admin: React.FC = () => {
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => setActiveOrdersTab('custom')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeOrdersTab === 'custom' 
+                    ? 'bg-white text-indigo-600 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                }`}
+              >
+                <MessageSquare className="h-4 w-4" />
+                Pesanan Khusus
+                {customOrders.length > 0 && (
+                  <span className="ml-1.5 bg-indigo-100 text-indigo-600 py-0.5 px-2 rounded-full text-xs">
+                    {customOrders.length}
+                  </span>
+                )}
+              </button>
             </div>
             
             <button
@@ -524,41 +563,116 @@ export const Admin: React.FC = () => {
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm font-semibold uppercase tracking-wider">
-                    <th className="p-4 pl-6">Kode Pesanan</th>
-                    <th className="p-4">Tanggal</th>
-                    <th className="p-4">Pelanggan</th>
-                    <th className="p-4">No. Telepon</th>
-                    <th className="p-4">Alamat Pengiriman</th>
-                    <th className="p-4">Detail Produk</th>
-                    <th className="p-4">Total</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4 pr-6 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {displayOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="p-4 pl-6">
-                        <p className="font-mono font-bold text-indigo-600">{order.orderCode || order.id.slice(0, 8).toUpperCase()}</p>
-                      </td>
-                      <td className="p-4">
-                        <p className="text-sm text-gray-600">
-                          {order.createdAt?.seconds ? new Date((order.createdAt as any).seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Baru saja'}
-                        </p>
-                      </td>
-                      <td className="p-4">
-                        <p className="font-bold text-gray-900">{order.customerName}</p>
-                      </td>
-                      <td className="p-4">
-                        <p className="text-sm text-gray-500">{order.customerPhone}</p>
-                      </td>
-                      <td className="p-4 max-w-xs">
-                        <p className="text-sm text-gray-500 line-clamp-2" title={order.customerAddress}>{order.customerAddress}</p>
-                      </td>
-                      <td className="p-4 min-w-[200px]">
+              {activeOrdersTab === 'custom' ? (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm font-semibold uppercase tracking-wider">
+                      <th className="p-4 pl-6">Tanggal</th>
+                      <th className="p-4">Pelanggan</th>
+                      <th className="p-4">No. Telepon</th>
+                      <th className="p-4">Alamat</th>
+                      <th className="p-4">Produk Diminta</th>
+                      <th className="p-4">Deskripsi</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4 pr-6 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {customOrders.map((order) => (
+                      <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="p-4 pl-6">
+                          <p className="text-sm text-gray-600">
+                            {order.createdAt?.seconds ? new Date((order.createdAt as any).seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Baru saja'}
+                          </p>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-bold text-gray-900">{order.customerName}</p>
+                        </td>
+                        <td className="p-4">
+                          <p className="text-sm text-gray-500">{order.customerPhone}</p>
+                        </td>
+                        <td className="p-4 max-w-xs">
+                          <p className="text-sm text-gray-500 line-clamp-2" title={order.customerAddress}>{order.customerAddress}</p>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-medium text-gray-900">{order.productName}</p>
+                        </td>
+                        <td className="p-4 max-w-xs">
+                          <p className="text-sm text-gray-500 line-clamp-2" title={order.description}>{order.description}</p>
+                        </td>
+                        <td className="p-4">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${statusColors[order.status]}`}>
+                            {statusLabels[order.status]}
+                          </span>
+                        </td>
+                        <td className="p-4 pr-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <select
+                              value={order.status}
+                              onChange={(e) => handleUpdateCustomOrderStatus(order.id, e.target.value as CustomOrder['status'])}
+                              className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none"
+                            >
+                              <option value="pending">Menunggu</option>
+                              <option value="processing">Diproses</option>
+                              <option value="completed">Selesai</option>
+                              <option value="cancelled">Batal</option>
+                            </select>
+                            <button
+                              onClick={() => handleDeleteCustomOrder(order.id)}
+                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Hapus Permintaan"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {customOrders.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="p-8 text-center text-gray-500">
+                          Belum ada permintaan produk khusus.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm font-semibold uppercase tracking-wider">
+                      <th className="p-4 pl-6">Kode Pesanan</th>
+                      <th className="p-4">Tanggal</th>
+                      <th className="p-4">Pelanggan</th>
+                      <th className="p-4">No. Telepon</th>
+                      <th className="p-4">Alamat Pengiriman</th>
+                      <th className="p-4">Detail Produk</th>
+                      <th className="p-4">Total</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4 pr-6 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {displayOrders.map((order) => (
+                      <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="p-4 pl-6">
+                          <p className="font-mono font-bold text-indigo-600">{order.orderCode || order.id.slice(0, 8).toUpperCase()}</p>
+                        </td>
+                        <td className="p-4">
+                          <p className="text-sm text-gray-600">
+                            {order.createdAt?.seconds ? new Date((order.createdAt as any).seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Baru saja'}
+                          </p>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-bold text-gray-900">{order.customerName}</p>
+                        </td>
+                        <td className="p-4">
+                          <p className="text-sm text-gray-500">{order.customerPhone}</p>
+                        </td>
+                        <td className="p-4 max-w-xs">
+                          <p className="text-sm text-gray-500 line-clamp-2" title={order.customerAddress}>{order.customerAddress}</p>
+                        </td>
+                        <td className="p-4 min-w-[200px]">
                         <div className="flex flex-col gap-1.5 max-h-28 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
                           {order.items?.map((item, idx) => (
                             <div key={idx} className="text-sm flex justify-between items-start gap-3 border-b border-gray-50 pb-1.5 last:border-0 last:pb-0">
@@ -616,6 +730,7 @@ export const Admin: React.FC = () => {
                   )}
                 </tbody>
               </table>
+              )}
             </div>
           </div>
         </div>

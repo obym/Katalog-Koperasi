@@ -33,6 +33,18 @@ export interface Order {
   createdAt: Date;
 }
 
+export interface CustomOrder {
+  id: string;
+  userId: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  productName: string;
+  description: string;
+  status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  createdAt: Date;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
