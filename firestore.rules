@@ -94,7 +94,7 @@ service cloud.firestore {
              data.description is string && data.description.size() <= 1000 &&
              data.price is number && data.price >= 0 &&
              data.category is string && data.category.size() > 0 && data.category.size() <= 50 &&
-             isValidUrl(data.imageUrl) && data.imageUrl.size() <= 500 &&
+             data.imageUrl is string && (data.imageUrl == '' || isValidUrl(data.imageUrl)) && data.imageUrl.size() <= 500 &&
              data.stock is number && data.stock >= 0 &&
              (!('productCode' in data) || (data.productCode is string && data.productCode.size() <= 50)) &&
              (!('unit' in data) || (data.unit is string && data.unit.size() <= 20)) &&
@@ -151,7 +151,7 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidOrder(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow create: if (isAuthenticated() && isValidOrder(request.resource.data) && request.resource.data.userId == request.auth.uid) || (isAdmin() && isValidOrder(request.resource.data));
       allow update: if (isAdmin() && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'createdAt'])) ||
                        (isAuthenticated() && resource.data.userId == request.auth.uid && resource.data.status == 'pending' && request.resource.data.status in ['pending', 'cancelled'] && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['userId', 'createdAt', 'orderCode']));
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid && resource.data.status == 'pending');

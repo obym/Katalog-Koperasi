@@ -163,9 +163,77 @@ export const Admin: React.FC = () => {
 
   const handleUpdateCustomOrderStatus = async (orderId: string, status: CustomOrder['status']) => {
     try {
-      await updateDoc(doc(db, 'customOrders', orderId), { status });
+      const order = customOrders.find(o => o.id === orderId);
+      if (!order) return;
+
+      const updateData = {
+        status,
+        customerName: order.customerName || 'Unknown',
+        customerPhone: order.customerPhone || 'Unknown',
+        customerAddress: order.customerAddress || 'Unknown',
+        description: order.description || '',
+        productName: order.productName || 'Unknown Product'
+      };
+
+      if (status === 'completed' && order.status !== 'completed') {
+        const batch = writeBatch(db);
+        const customOrderRef = doc(db, 'customOrders', orderId);
+        batch.update(customOrderRef, updateData);
+
+        // Generate a new product code
+        const maxCode = products.reduce((max, p) => {
+          const num = p.productCode ? parseInt(p.productCode.replace(/\D/g, ''), 10) : 0;
+          return num > max ? num : max;
+        }, 0);
+        const newProductCode = `PRD-${String(maxCode + 1).padStart(3, '0')}`;
+
+        const newProductRef = doc(collection(db, 'products'));
+        batch.set(newProductRef, {
+          name: order.productName || 'Unknown Product',
+          description: order.description || '',
+          price: order.price || 0,
+          category: 'Pesanan Khusus',
+          imageUrl: order.imageUrl || '',
+          stock: order.quantity || 0,
+          unit: order.unit || 'pcs',
+          productCode: newProductCode,
+          createdAt: serverTimestamp()
+        });
+        
+        // Generate a new order code
+        const timestampStr = Date.now().toString().slice(-6);
+        const randomStr = Math.random().toString(36).substring(2, 5).toUpperCase();
+        const orderCode = `ORD-${timestampStr}${randomStr}`;
+
+        // Create an active order for the user
+        const newOrderRef = doc(collection(db, 'orders'));
+        batch.set(newOrderRef, {
+          orderCode,
+          userId: order.userId,
+          customerName: order.customerName || 'Unknown',
+          customerPhone: order.customerPhone || 'Unknown',
+          customerAddress: order.customerAddress || 'Unknown',
+          items: [{
+            productId: newProductRef.id,
+            productCode: newProductCode,
+            name: order.productName || 'Unknown Product',
+            quantity: order.quantity || 1,
+            price: order.price || 0,
+            unit: order.unit || 'pcs'
+          }],
+          totalAmount: (order.price || 0) * (order.quantity || 1),
+          status: 'pending',
+          createdAt: serverTimestamp()
+        });
+        
+        await batch.commit();
+        alert(`Pesanan khusus selesai. Produk "${order.productName || 'Unknown Product'}" telah ditambahkan ke katalog dan pesanan aktif telah dibuat.`);
+      } else {
+        await updateDoc(doc(db, 'customOrders', orderId), updateData);
+      }
     } catch (error) {
       console.error("Error updating custom order status:", error);
+      alert("Gagal memperbarui status pesanan khusus.");
     }
   };
 
