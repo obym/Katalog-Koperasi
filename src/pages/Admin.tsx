@@ -3,15 +3,16 @@ import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, deleteD
 import { db } from '../lib/firebase';
 import { Product, Order } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Package, ShoppingBag, Plus, Trash2, Edit, X, Check, Loader2, ShieldAlert, Download, History } from 'lucide-react';
+import { Package, ShoppingBag, Plus, Trash2, Edit, X, Check, Loader2, ShieldAlert, Download, History, Users } from 'lucide-react';
 
 export const Admin: React.FC = () => {
   const { isAdmin, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'users'>('products');
   const [activeOrdersTab, setActiveOrdersTab] = useState<'active' | 'history'>('active');
   
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -45,9 +46,22 @@ export const Admin: React.FC = () => {
       setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
     });
 
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      usersData.sort((a: any, b: any) => {
+        const dateA = a.createdAt?.seconds || 0;
+        const dateB = b.createdAt?.seconds || 0;
+        return dateB - dateA;
+      });
+      setUsers(usersData);
+    }, (error) => {
+      console.error("Error fetching users:", error);
+    });
+
     return () => {
       unsubProducts();
       unsubOrders();
+      unsubUsers();
     };
   }, [isAdmin]);
 
@@ -270,6 +284,18 @@ export const Admin: React.FC = () => {
     }
   };
 
+  const handleToggleAdmin = async (userId: string, currentRole: string) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        role: currentRole === 'admin' ? 'customer' : 'admin'
+      });
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      alert("Gagal mengubah peran pengguna.");
+    }
+  };
+
   const formatRupiah = (price: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
   };
@@ -350,6 +376,15 @@ export const Admin: React.FC = () => {
           >
             <ShoppingBag className="h-5 w-5" />
             Pesanan
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
+              activeTab === 'users' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Users className="h-5 w-5" />
+            Pengguna
           </button>
         </div>
       </div>
@@ -500,7 +535,7 @@ export const Admin: React.FC = () => {
                       </td>
                       <td className="p-4">
                         <p className="text-sm text-gray-600">
-                          {order.createdAt ? new Date((order.createdAt as any).seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                          {order.createdAt?.seconds ? new Date((order.createdAt as any).seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Baru saja'}
                         </p>
                       </td>
                       <td className="p-4">
@@ -566,6 +601,66 @@ export const Admin: React.FC = () => {
                       <td colSpan={9} className="p-8 text-center text-gray-500">
                         {activeOrdersTab === 'active' ? 'Belum ada pesanan aktif.' : 'Belum ada riwayat pesanan.'}
                       </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'users' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100 text-gray-500 text-sm font-semibold uppercase tracking-wider">
+                    <th className="p-4 pl-6">Email</th>
+                    <th className="p-4">Tanggal Bergabung</th>
+                    <th className="p-4">Peran</th>
+                    <th className="p-4 pr-6 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="p-4 pl-6 font-medium text-gray-900">
+                        {u.email}
+                      </td>
+                      <td className="p-4 text-sm text-gray-500">
+                        {u.createdAt?.seconds ? new Date(u.createdAt.seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Baru saja'}
+                      </td>
+                      <td className="p-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          u.role === 'admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {u.role === 'admin' ? 'Admin' : 'Pelanggan'}
+                        </span>
+                      </td>
+                      <td className="p-4 pr-6 text-right">
+                        {u.email !== 'obym.ppngroup@gmail.com' && (
+                          <button 
+                            onClick={() => handleToggleAdmin(u.id, u.role)} 
+                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                              u.role === 'admin' 
+                                ? 'bg-red-50 text-red-600 hover:bg-red-100' 
+                                : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                            }`}
+                          >
+                            {u.role === 'admin' ? 'Hapus Admin' : 'Jadikan Admin'}
+                          </button>
+                        )}
+                        {u.email === 'obym.ppngroup@gmail.com' && (
+                          <span className="text-xs text-gray-400 italic">Admin Utama</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {users.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-gray-500">Belum ada pengguna terdaftar.</td>
                     </tr>
                   )}
                 </tbody>
