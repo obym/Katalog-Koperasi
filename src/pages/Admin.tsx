@@ -572,7 +572,7 @@ export const Admin: React.FC = () => {
                       <th className="p-4">No. Telepon</th>
                       <th className="p-4">Alamat</th>
                       <th className="p-4">Produk Diminta</th>
-                      <th className="p-4">Deskripsi</th>
+                      <th className="p-4">Detail & Harga</th>
                       <th className="p-4">Status</th>
                       <th className="p-4 pr-6 text-right">Aksi</th>
                     </tr>
@@ -595,9 +595,22 @@ export const Admin: React.FC = () => {
                           <p className="text-sm text-gray-500 line-clamp-2" title={order.customerAddress}>{order.customerAddress}</p>
                         </td>
                         <td className="p-4">
-                          <p className="font-medium text-gray-900">{order.productName}</p>
+                          <div className="flex items-center gap-3">
+                            {order.imageUrl ? (
+                              <img src={order.imageUrl} alt={order.productName} className="w-10 h-10 rounded-lg object-cover border border-gray-200" referrerPolicy="no-referrer" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center border border-gray-200">
+                                <Package className="h-5 w-5 text-gray-400" />
+                              </div>
+                            )}
+                            <p className="font-medium text-gray-900">{order.productName}</p>
+                          </div>
                         </td>
                         <td className="p-4 max-w-xs">
+                          <div className="text-sm text-gray-500 mb-1">
+                            <span className="font-medium text-gray-700">{order.quantity} {order.unit}</span>
+                            {order.price > 0 && <span> • {formatRupiah(order.price)}</span>}
+                          </div>
                           <p className="text-sm text-gray-500 line-clamp-2" title={order.description}>{order.description}</p>
                         </td>
                         <td className="p-4">

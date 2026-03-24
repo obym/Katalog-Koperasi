@@ -19,7 +19,11 @@ export const Catalog: React.FC = () => {
     description: '',
     customerName: '',
     customerPhone: '',
-    customerAddress: ''
+    customerAddress: '',
+    price: '',
+    quantity: '1',
+    unit: 'pcs',
+    imageUrl: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -48,6 +52,10 @@ export const Catalog: React.FC = () => {
         customerAddress: requestForm.customerAddress,
         productName: requestForm.productName,
         description: requestForm.description,
+        price: Number(requestForm.price) || 0,
+        quantity: Number(requestForm.quantity) || 1,
+        unit: requestForm.unit,
+        imageUrl: requestForm.imageUrl,
         status: 'pending',
         createdAt: serverTimestamp()
       });
@@ -57,7 +65,11 @@ export const Catalog: React.FC = () => {
         description: '',
         customerName: profile?.email?.split('@')[0] || user.displayName || '',
         customerPhone: '',
-        customerAddress: ''
+        customerAddress: '',
+        price: '',
+        quantity: '1',
+        unit: 'pcs',
+        imageUrl: ''
       });
       alert("Permintaan produk berhasil dikirim!");
     } catch (error) {
@@ -157,13 +169,6 @@ export const Catalog: React.FC = () => {
           <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-bold text-gray-900 mb-2">Produk Tidak Ditemukan</h3>
           <p className="text-gray-500 mb-6">Coba ubah kata kunci pencarian atau kategori filter Anda.</p>
-          <button
-            onClick={() => setIsRequestModalOpen(true)}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-            <PlusCircle className="h-5 w-5" />
-            Tidak menemukan produk yang diinginkan?
-          </button>
         </div>
       ) : (
         <>
@@ -172,17 +177,18 @@ export const Catalog: React.FC = () => {
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
-          <div className="mt-12 text-center">
-            <button
-              onClick={() => setIsRequestModalOpen(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-700 font-medium rounded-xl hover:bg-indigo-100 transition-colors"
-            >
-              <PlusCircle className="h-5 w-5" />
-              Tidak menemukan produk yang diinginkan?
-            </button>
-          </div>
         </>
       )}
+
+      {/* Floating Request Button */}
+      <button
+        onClick={() => setIsRequestModalOpen(true)}
+        className="fixed bottom-8 right-8 z-40 flex items-center gap-2 px-5 py-4 bg-indigo-600 text-white font-bold rounded-full shadow-xl hover:bg-indigo-700 hover:scale-105 transition-all"
+        title="Tidak menemukan produk yang diinginkan?"
+      >
+        <PlusCircle className="h-6 w-6" />
+        <span className="hidden sm:inline">Request Produk</span>
+      </button>
 
       {/* Request Product Modal */}
       {isRequestModalOpen && (
@@ -237,6 +243,52 @@ export const Catalog: React.FC = () => {
                   onChange={(e) => setRequestForm({ ...requestForm, productName: e.target.value })}
                   className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
                   placeholder="Contoh: Beras Merah Organik 5kg"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Jumlah</label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={requestForm.quantity}
+                    onChange={(e) => setRequestForm({ ...requestForm, quantity: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                    placeholder="1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Satuan</label>
+                  <input
+                    type="text"
+                    required
+                    value={requestForm.unit}
+                    onChange={(e) => setRequestForm({ ...requestForm, unit: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                    placeholder="Contoh: pcs, kg, pack"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Perkiraan / Target)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={requestForm.price}
+                  onChange={(e) => setRequestForm({ ...requestForm, price: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                  placeholder="Contoh: 50000 (Kosongkan jika tidak tahu)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL Gambar (Opsional)</label>
+                <input
+                  type="url"
+                  value={requestForm.imageUrl}
+                  onChange={(e) => setRequestForm({ ...requestForm, imageUrl: e.target.value })}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                  placeholder="https://contoh.com/gambar.jpg"
                 />
               </div>
               <div>

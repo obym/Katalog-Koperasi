@@ -37,6 +37,10 @@ service cloud.firestore {
     //   - customerAddress: string (required, < 500 chars)
     //   - productName: string (required, < 100 chars)
     //   - description: string (required, < 1000 chars)
+    //   - price: number (required, >= 0)
+    //   - quantity: number (required, > 0)
+    //   - unit: string (required, < 20 chars)
+    //   - imageUrl: string (required, url format or empty)
     //   - status: string (required, enum: pending, processing, completed, cancelled)
     //   - createdAt: timestamp (required, immutable)
     //
@@ -111,13 +115,17 @@ service cloud.firestore {
     }
 
     function isValidCustomOrder(data) {
-      return hasOnlyAllowedFields(['userId', 'customerName', 'customerPhone', 'customerAddress', 'productName', 'description', 'status', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'customerName', 'customerPhone', 'customerAddress', 'productName', 'description', 'price', 'quantity', 'unit', 'imageUrl', 'status', 'createdAt']) &&
              data.userId is string &&
              data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 100 &&
              data.customerPhone is string && data.customerPhone.size() > 0 && data.customerPhone.size() <= 20 &&
              data.customerAddress is string && data.customerAddress.size() > 0 && data.customerAddress.size() <= 500 &&
              data.productName is string && data.productName.size() > 0 && data.productName.size() <= 100 &&
              data.description is string && data.description.size() <= 1000 &&
+             data.price is number && data.price >= 0 &&
+             data.quantity is number && data.quantity > 0 &&
+             data.unit is string && data.unit.size() <= 20 &&
+             data.imageUrl is string && (data.imageUrl == '' || isValidUrl(data.imageUrl)) && data.imageUrl.size() <= 500 &&
              data.status in ['pending', 'processing', 'completed', 'cancelled'] &&
              data.createdAt is timestamp;
     }

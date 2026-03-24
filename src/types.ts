@@ -41,6 +41,10 @@ export interface CustomOrder {
   customerAddress: string;
   productName: string;
   description: string;
+  price: number;
+  quantity: number;
+  unit: string;
+  imageUrl: string;
   status: 'pending' | 'processing' | 'completed' | 'cancelled';
   createdAt: Date;
 }
