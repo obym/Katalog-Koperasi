@@ -14,7 +14,15 @@ export const Navbar: React.FC = () => {
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
             <Link to="/" className="flex items-center gap-2 sm:gap-3">
-              <Package className="h-8 w-8 text-indigo-600 shrink-0" />
+              <img 
+                src="https://upload.wikimedia.org/wikipedia/commons/9/90/National_emblem_of_Indonesia_Garuda_Pancasila.svg" 
+                alt="Garuda Pancasila" 
+                className="h-10 w-10 object-contain shrink-0" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/National_emblem_of_Indonesia_Garuda_Pancasila.svg/200px-National_emblem_of_Indonesia_Garuda_Pancasila.svg.png";
+                }}
+              />
               <div className="flex flex-col">
                 <span className="font-bold text-sm sm:text-lg text-gray-900 leading-tight">Koperasi</span>
                 <span className="font-bold text-xs sm:text-base text-indigo-600 leading-tight">Kumpul Dulur Sejahtera</span>

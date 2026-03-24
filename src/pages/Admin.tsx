@@ -31,6 +31,7 @@ export const Admin: React.FC = () => {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -293,6 +294,16 @@ export const Admin: React.FC = () => {
     } catch (error) {
       console.error("Error updating user role:", error);
       alert("Gagal mengubah peran pengguna.");
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    try {
+      await deleteDoc(doc(db, 'users', userId));
+      setUserToDelete(null);
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      alert("Gagal menghapus pengguna.");
     }
   };
 
@@ -640,21 +651,32 @@ export const Admin: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-4 pr-6 text-right">
-                        {u.email !== 'obym.ppngroup@gmail.com' && (
-                          <button 
-                            onClick={() => handleToggleAdmin(u.id, u.role)} 
-                            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                              u.role === 'admin' 
-                                ? 'bg-red-50 text-red-600 hover:bg-red-100' 
-                                : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                            }`}
-                          >
-                            {u.role === 'admin' ? 'Hapus Admin' : 'Jadikan Admin'}
-                          </button>
-                        )}
-                        {u.email === 'obym.ppngroup@gmail.com' && (
-                          <span className="text-xs text-gray-400 italic">Admin Utama</span>
-                        )}
+                        <div className="flex items-center justify-end gap-2">
+                          {u.email !== 'obym.ppngroup@gmail.com' && (
+                            <>
+                              <button 
+                                onClick={() => handleToggleAdmin(u.id, u.role)} 
+                                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                                  u.role === 'admin' 
+                                    ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' 
+                                    : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                                }`}
+                              >
+                                {u.role === 'admin' ? 'Hapus Admin' : 'Jadikan Admin'}
+                              </button>
+                              <button
+                                onClick={() => setUserToDelete(u.id)}
+                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Hapus Pengguna"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                          {u.email === 'obym.ppngroup@gmail.com' && (
+                            <span className="text-xs text-gray-400 italic">Admin Utama</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -808,6 +830,35 @@ export const Admin: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus Pengguna */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+              <ShieldAlert className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold text-center text-gray-900 mb-2">Hapus Pengguna</h3>
+            <p className="text-center text-gray-500 mb-6">
+              Apakah Anda yakin ingin menghapus pengguna ini? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => setUserToDelete(null)}
+                className="px-6 py-2.5 rounded-xl font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => handleDeleteUser(userToDelete)}
+                className="px-6 py-2.5 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm"
+              >
+                Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}

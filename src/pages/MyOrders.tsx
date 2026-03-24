@@ -3,7 +3,7 @@ import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDo
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Order, Product, OrderItem } from '../types';
-import { Package, Clock, CheckCircle, XCircle, Edit, Trash2, Loader2, X, Plus, Minus, History, ShoppingBag } from 'lucide-react';
+import { Package, Clock, CheckCircle, XCircle, Edit, Trash2, Loader2, X, Plus, Minus, History, ShoppingBag, ChevronDown, ChevronUp } from 'lucide-react';
 
 export const MyOrders: React.FC = () => {
   const { user } = useAuth();
@@ -11,6 +11,7 @@ export const MyOrders: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -308,8 +309,11 @@ export const MyOrders: React.FC = () => {
         <div className="space-y-6">
           {displayOrders.map((order) => (
             <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
+              <div 
+                className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
+              >
+                <div className="flex-1">
                   <div className="flex items-center gap-3 mb-1">
                     <span className="font-bold text-gray-900">{order.orderCode}</span>
                     {getStatusBadge(order.status)}
@@ -320,62 +324,71 @@ export const MyOrders: React.FC = () => {
                     })}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500 mb-1">Total Belanja</p>
-                  <p className="text-xl font-bold text-indigo-600">{formatRupiah(order.totalAmount)}</p>
+                <div className="flex items-center gap-4 text-right">
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Total Belanja</p>
+                    <p className="text-xl font-bold text-indigo-600">{formatRupiah(order.totalAmount)}</p>
+                  </div>
+                  <div className="text-gray-400">
+                    {expandedOrderId === order.id ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />}
+                  </div>
                 </div>
               </div>
               
-              <div className="p-6 bg-gray-50">
-                <h4 className="font-semibold text-gray-900 mb-4">Detail Pengiriman</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500">Nama Penerima</p>
-                    <p className="font-medium text-gray-900">{order.customerName}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-500">Nomor WhatsApp</p>
-                    <p className="font-medium text-gray-900">{order.customerPhone}</p>
-                  </div>
-                  <div className="md:col-span-2">
-                    <p className="text-gray-500">Alamat Pengiriman</p>
-                    <p className="font-medium text-gray-900">{order.customerAddress}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6">
-                <h4 className="font-semibold text-gray-900 mb-4">Produk yang Dipesan</h4>
-                <div className="space-y-4">
-                  {order.items.map((item, index) => (
-                    <div key={index} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+              {expandedOrderId === order.id && (
+                <>
+                  <div className="p-6 bg-gray-50">
+                    <h4 className="font-semibold text-gray-900 mb-4">Detail Pengiriman</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
-                        <p className="font-medium text-gray-900">{item.name}</p>
-                        <p className="text-sm text-gray-500">{item.quantity} {item.unit || ''} x {formatRupiah(item.price)}</p>
+                        <p className="text-gray-500">Nama Penerima</p>
+                        <p className="font-medium text-gray-900">{order.customerName}</p>
                       </div>
-                      <p className="font-bold text-gray-900">{formatRupiah(item.price * item.quantity)}</p>
+                      <div>
+                        <p className="text-gray-500">Nomor WhatsApp</p>
+                        <p className="font-medium text-gray-900">{order.customerPhone}</p>
+                      </div>
+                      <div className="md:col-span-2">
+                        <p className="text-gray-500">Alamat Pengiriman</p>
+                        <p className="font-medium text-gray-900">{order.customerAddress}</p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              {order.status === 'pending' && (
-                <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-white">
-                  <button
-                    onClick={() => handleOpenEditModal(order)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
-                  >
-                    <Edit className="h-4 w-4" />
-                    Edit Pesanan
-                  </button>
-                  <button
-                    onClick={() => handleCancelClick(order)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Batalkan Pesanan
-                  </button>
-                </div>
+                  <div className="p-6">
+                    <h4 className="font-semibold text-gray-900 mb-4">Produk yang Dipesan</h4>
+                    <div className="space-y-4">
+                      {order.items.map((item, index) => (
+                        <div key={index} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+                          <div>
+                            <p className="font-medium text-gray-900">{item.name}</p>
+                            <p className="text-sm text-gray-500">{item.quantity} {item.unit || ''} x {formatRupiah(item.price)}</p>
+                          </div>
+                          <p className="font-bold text-gray-900">{formatRupiah(item.price * item.quantity)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {order.status === 'pending' && (
+                    <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-white">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleOpenEditModal(order); }}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit Pesanan
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCancelClick(order); }}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Batalkan Pesanan
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}
