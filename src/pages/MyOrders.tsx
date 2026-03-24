@@ -3,13 +3,14 @@ import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDo
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Order, Product, OrderItem } from '../types';
-import { Package, Clock, CheckCircle, XCircle, Edit, Trash2, Loader2, X, Plus, Minus } from 'lucide-react';
+import { Package, Clock, CheckCircle, XCircle, Edit, Trash2, Loader2, X, Plus, Minus, History, ShoppingBag } from 'lucide-react';
 
 export const MyOrders: React.FC = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -242,19 +243,70 @@ export const MyOrders: React.FC = () => {
     );
   }
 
+  const activeOrders = orders.filter(o => o.status === 'pending' || o.status === 'processing');
+  const historyOrders = orders.filter(o => o.status === 'completed' || o.status === 'cancelled');
+  const displayOrders = activeTab === 'active' ? activeOrders : historyOrders;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <h1 className="text-3xl font-extrabold text-gray-900 mb-8">Pesanan Saya</h1>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <h1 className="text-3xl font-extrabold text-gray-900">Pesanan Saya</h1>
+        
+        <div className="flex bg-gray-100 p-1 rounded-xl inline-flex w-full md:w-auto">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'active' 
+                ? 'bg-white text-indigo-600 shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+            }`}
+          >
+            <ShoppingBag className="h-4 w-4" />
+            Pesanan Aktif
+            {activeOrders.length > 0 && (
+              <span className="ml-1.5 bg-indigo-100 text-indigo-600 py-0.5 px-2 rounded-full text-xs">
+                {activeOrders.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'history' 
+                ? 'bg-white text-indigo-600 shadow-sm' 
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+            }`}
+          >
+            <History className="h-4 w-4" />
+            Riwayat
+            {historyOrders.length > 0 && (
+              <span className="ml-1.5 bg-gray-200 text-gray-700 py-0.5 px-2 rounded-full text-xs">
+                {historyOrders.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
 
-      {orders.length === 0 ? (
+      {displayOrders.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
-          <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Belum Ada Pesanan</h3>
-          <p className="text-gray-500">Anda belum membuat pesanan apapun.</p>
+          {activeTab === 'active' ? (
+            <>
+              <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Belum Ada Pesanan Aktif</h3>
+              <p className="text-gray-500">Anda belum memiliki pesanan yang sedang diproses.</p>
+            </>
+          ) : (
+            <>
+              <History className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Belum Ada Riwayat</h3>
+              <p className="text-gray-500">Anda belum memiliki riwayat pesanan yang selesai atau dibatalkan.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
-          {orders.map((order) => (
+          {displayOrders.map((order) => (
             <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>

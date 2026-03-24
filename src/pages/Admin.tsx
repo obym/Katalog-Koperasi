@@ -3,11 +3,12 @@ import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, deleteD
 import { db } from '../lib/firebase';
 import { Product, Order } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Package, ShoppingBag, Plus, Trash2, Edit, X, Check, Loader2, ShieldAlert } from 'lucide-react';
+import { Package, ShoppingBag, Plus, Trash2, Edit, X, Check, Loader2, ShieldAlert, Download, History } from 'lucide-react';
 
 export const Admin: React.FC = () => {
   const { isAdmin, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products');
+  const [activeOrdersTab, setActiveOrdersTab] = useState<'active' | 'history'>('active');
   
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -287,6 +288,42 @@ export const Admin: React.FC = () => {
     cancelled: 'Dibatalkan',
   };
 
+  const handleDownloadCSV = () => {
+    const ordersToExport = activeOrdersTab === 'active' 
+      ? orders.filter(o => o.status === 'pending' || o.status === 'processing')
+      : orders.filter(o => o.status === 'completed' || o.status === 'cancelled');
+
+    const headers = ['Kode Pesanan', 'Tanggal', 'Pelanggan', 'No. Telepon', 'Alamat Pengiriman', 'Total', 'Status', 'Detail Produk'];
+    const rows = ordersToExport.map(order => {
+      const date = order.createdAt ? new Date((order.createdAt as any).seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+      const items = order.items.map(item => `${item.name} (x${item.quantity} ${item.unit || ''})`).join('; ');
+      return [
+        order.orderCode || order.id.slice(0, 8).toUpperCase(),
+        date,
+        `"${order.customerName.replace(/"/g, '""')}"`,
+        `"${order.customerPhone.replace(/"/g, '""')}"`,
+        `"${order.customerAddress.replace(/"/g, '""')}"`,
+        order.totalAmount,
+        statusLabels[order.status],
+        `"${items.replace(/"/g, '""')}"`
+      ].join(',');
+    });
+    
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `pesanan_${activeOrdersTab}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const activeOrders = orders.filter(o => o.status === 'pending' || o.status === 'processing');
+  const historyOrders = orders.filter(o => o.status === 'completed' || o.status === 'cancelled');
+  const displayOrders = activeOrdersTab === 'active' ? activeOrders : historyOrders;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
@@ -394,6 +431,51 @@ export const Admin: React.FC = () => {
 
       {activeTab === 'orders' && (
         <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex bg-gray-100 p-1 rounded-xl inline-flex w-full sm:w-auto">
+              <button
+                onClick={() => setActiveOrdersTab('active')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeOrdersTab === 'active' 
+                    ? 'bg-white text-indigo-600 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                }`}
+              >
+                <ShoppingBag className="h-4 w-4" />
+                Pesanan Aktif
+                {activeOrders.length > 0 && (
+                  <span className="ml-1.5 bg-indigo-100 text-indigo-600 py-0.5 px-2 rounded-full text-xs">
+                    {activeOrders.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveOrdersTab('history')}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeOrdersTab === 'history' 
+                    ? 'bg-white text-indigo-600 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                }`}
+              >
+                <History className="h-4 w-4" />
+                Riwayat
+                {historyOrders.length > 0 && (
+                  <span className="ml-1.5 bg-gray-200 text-gray-700 py-0.5 px-2 rounded-full text-xs">
+                    {historyOrders.length}
+                  </span>
+                )}
+              </button>
+            </div>
+            
+            <button
+              onClick={handleDownloadCSV}
+              className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-green-700 transition-colors shadow-sm w-full sm:w-auto justify-center"
+            >
+              <Download className="h-4 w-4" />
+              Download CSV (Google Sheets)
+            </button>
+          </div>
+
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -411,7 +493,7 @@ export const Admin: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {orders.map((order) => (
+                  {displayOrders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                       <td className="p-4 pl-6">
                         <p className="font-mono font-bold text-indigo-600">{order.orderCode || order.id.slice(0, 8).toUpperCase()}</p>
@@ -479,9 +561,11 @@ export const Admin: React.FC = () => {
                       </td>
                     </tr>
                   ))}
-                  {orders.length === 0 && (
+                  {displayOrders.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-gray-500">Belum ada pesanan masuk.</td>
+                      <td colSpan={9} className="p-8 text-center text-gray-500">
+                        {activeOrdersTab === 'active' ? 'Belum ada pesanan aktif.' : 'Belum ada riwayat pesanan.'}
+                      </td>
                     </tr>
                   )}
                 </tbody>

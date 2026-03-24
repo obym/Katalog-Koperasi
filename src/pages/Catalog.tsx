@@ -7,18 +7,32 @@ import { Search, Filter, Loader2, Package } from 'lucide-react';
 
 export const Catalog: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [randomOrder, setRandomOrder] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
 
   useEffect(() => {
-    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'products'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const productsData = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
       })) as Product[];
+      
+      setRandomOrder(prev => {
+        const newOrder = { ...prev };
+        let changed = false;
+        productsData.forEach(p => {
+          if (newOrder[p.id] === undefined) {
+            newOrder[p.id] = Math.random();
+            changed = true;
+          }
+        });
+        return changed ? newOrder : prev;
+      });
+
       setProducts(productsData);
       setLoading(false);
     }, (error) => {
@@ -36,7 +50,7 @@ export const Catalog: React.FC = () => {
                           product.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === 'Semua' || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
-  });
+  }).sort((a, b) => (randomOrder[a.id] || 0) - (randomOrder[b.id] || 0));
 
   if (loading) {
     return (
